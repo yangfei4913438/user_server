@@ -2,12 +2,10 @@ import { Global, Module } from '@nestjs/common';
 import { RabbitMQModule } from '@golevelup/nestjs-rabbitmq';
 import { RabbitMQService } from './rabbitmq.service';
 import { mq } from '../consts/user';
-import { EmailService } from '../email/email.service';
 
 @Global()
 @Module({
   imports: [
-    EmailService,
     RabbitMQModule.forRoot(RabbitMQModule, {
       exchanges: [
         {

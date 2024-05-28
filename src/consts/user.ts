@@ -1,5 +1,3 @@
-import process from 'node:process';
-
 export const mq = {
   // 环境变量：RABBITMQ_URI
   uri_env: process.env.RABBITMQ_URI,
