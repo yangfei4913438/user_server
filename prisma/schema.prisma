@@ -16,9 +16,9 @@ datasource db {
 /// 用户表，存储用户的基本信息和关联的角色
 model User {
   id        String     @id @default(uuid()) /// 用户ID，UUID格式
-  username  String?    @unique @db.VarChar(100) /// 用户名，唯一, 用户名、邮箱、手机号三选一必填
-  email     String?    @unique @db.VarChar(100) /// 邮箱，唯一, 用户名、邮箱、手机号三选一必填
-  phone     String?    @unique @db.VarChar(11) /// 手机号, 唯一, 用户名、邮箱、手机号三选一必填
+  username  String    @unique @db.VarChar(100) /// 用户名，唯一, 必填
+  email     String     @unique @db.VarChar(100) /// 邮箱，唯一, 必填
+  phone     String?    @unique @db.VarChar(11) /// 手机号, 唯一, 可选
   password  String     @db.VarChar(200) /// 登录密码, hash后的密码
   nickname  String     @db.VarChar(50) /// 昵称
   avatar    String?    @db.VarChar(255) /// 头像url，可选
@@ -81,7 +81,7 @@ model RolePermission {
 model AuditLog {
   id        String   @id @default(uuid())
   action    String   @db.VarChar(100) /// 行为描述
-  result    String   @db.VarChar(100) /// 结果
+  result    String   @db.LongText /// 结果
   userId    String   @map("user_id") /// 用户ID, 外键，连接用户表，改动点
   createdAt DateTime @default(now()) @map("created_at") /// 创建时间
   user      User     @relation(fields: [userId], references: [id])

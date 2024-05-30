@@ -4,6 +4,7 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
@@ -11,26 +12,52 @@ import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from './decorators/public.decorator';
 
 @Injectable()
-export class AuthGuard implements CanActivate {
+export class AppGuard implements CanActivate {
+  private readonly logger = new Logger(AppGuard.name);
+
   constructor(
-    private jwtService: JwtService,
-    private reflector: Reflector,
+    private readonly jwtService: JwtService,
+    private readonly reflector: Reflector,
   ) {}
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
+  async canActivate(context: ExecutionContext) {
+    if (context.getType() !== 'http') {
+      // 如果不是 HTTP 请求，则不执行守卫逻辑
+      return true;
+    }
+
+    // 获取 request
+    const request = context.switchToHttp().getRequest();
+
+    if (!request) {
+      this.logger.warn('Request is undefined');
+      return false;
+    }
+
+    if (!request.method) {
+      this.logger.warn('Request method is undefined');
+      return false;
+    }
+
+    this.logger.log(`Request method: ${request.method}`);
+
     // 这段代码使用 Reflector 来获取自定义元数据 IS_PUBLIC_KEY，这通常用来标记某个路由处理程序（handler）或类（class）是否公开，
     // 即无需认证即可访问。代码中的 getAllAndOverride 方法尝试从路由处理程序或类中获取 IS_PUBLIC_KEY 元数据值。
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
+    this.logger.log(`isPublic: ${isPublic}`);
+
+    if (request.method === 'OPTIONS') {
+      return true;
+    }
+
     if (isPublic) {
       // 如果 IS_PUBLIC_KEY 的值为真，就不需要校验了，直接放行。
       return true;
     }
 
-    // 获取 request
-    const request = context.switchToHttp().getRequest();
     // 获取 token
     const token = this.extractTokenFromHandler(request);
     if (!token) {

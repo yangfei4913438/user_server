@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserService } from '../user/user.service';
-import argon2 from 'argon2';
+import * as argon2 from 'argon2';
 import { AuthLoginDto, AuthRegisterDto } from './dto/auth.dto';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -15,6 +15,13 @@ export class AuthService {
 
   // 登录
   async login(user: AuthLoginDto) {
+    if (!user.username && !user.email && !user.phone) {
+      throw new HttpException('缺少登陆账号', HttpStatus.FORBIDDEN);
+    }
+    if (!user.password) {
+      throw new HttpException('缺少登陆密码', HttpStatus.FORBIDDEN);
+    }
+
     // 密码处理
     const hashedPassword = await argon2.hash(user.password);
 
@@ -59,9 +66,12 @@ export class AuthService {
   // 注册
   async register(user: AuthRegisterDto): Promise<any> {
     const hashedPassword = await argon2.hash(user.password);
-    return this.userService.createUser({
-      ...user,
-      password: hashedPassword,
-    });
+    return this.userService.createUser(
+      {
+        ...user,
+        password: hashedPassword,
+      },
+      user.password,
+    );
   }
 }

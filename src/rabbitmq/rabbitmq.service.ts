@@ -1,17 +1,22 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import {
   AmqpConnection,
   MessageHandlerOptions,
   SubscriberHandler,
 } from '@golevelup/nestjs-rabbitmq';
-import { EmailService } from '../email/email.service';
 
 @Injectable()
-export class RabbitMQService {
-  constructor(private readonly amqpConnection: AmqpConnection) {}
+export class RabbitMQService implements OnModuleInit {
+  constructor(private readonly amqp: AmqpConnection) {}
 
-  async publish(exchange: string, routingKey: string, message: any) {
-    await this.amqpConnection.publish(exchange, routingKey, message);
+  async onModuleInit(): Promise<void> {
+    // 这里不需要显示的处理连接，模块初始化的时候，会自动处理连接。
+    // 这里可以添加一些自定义操作。
+    // console.log('初始化连接mq');
+  }
+
+  async publish<T>(exchange: string, routingKey: string, message: T) {
+    await this.amqp.publish<T>(exchange, routingKey, message);
   }
 
   async subscribe<T>(
@@ -20,7 +25,7 @@ export class RabbitMQService {
     msgOptions: MessageHandlerOptions,
     consumeOptions?: any,
   ) {
-    await this.amqpConnection.createSubscriber(
+    await this.amqp.createSubscriber<T>(
       handler,
       msgOptions,
       queue,

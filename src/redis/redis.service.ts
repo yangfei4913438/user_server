@@ -21,20 +21,33 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   // 获取结构化数据
-  async getHash(key: string): Promise<Record<string, string> | null> {
-    const result = await this.client.hGetAll(key);
-    return Object.keys(result).length ? result : null;
+  async getHash(hashKey: string): Promise<Record<string, string> | null> {
+    const obj = await this.client.hGetAll(hashKey);
+    if (Object.keys(obj).length === 0) {
+      return null;
+    }
+    return Object.fromEntries(
+      Object.entries(obj).map(([field, value]) => [field, JSON.parse(value)]),
+    );
   }
 
   // 存储结构化数据
   async setHash(
-    key: string,
-    value: Record<string, string>,
+    hashKey: string,
+    value: Record<string, any>,
     ttl?: number,
   ): Promise<void> {
-    await this.client.hSet(key, value);
+    // 创建一个包含序列化值的新对象
+    const serializedObj = Object.fromEntries(
+      Object.entries(value).map(([field, value]) => [
+        field,
+        JSON.stringify(value),
+      ]),
+    );
+    // 使用 hSet 方法设置序列化后的对象字段
+    await this.client.hSet(hashKey, serializedObj);
     if (ttl) {
-      await this.client.expire(key, ttl);
+      await this.client.expire(hashKey, ttl);
     }
   }
 

@@ -1,4 +1,7 @@
 import { IsNotEmpty } from 'class-validator';
+import { User } from '@prisma/client';
+
+export interface UserReturn extends Omit<User, 'password'> {}
 
 export class CreateUserDto {
   @IsNotEmpty({ message: '昵称不能为空' })
@@ -8,7 +11,7 @@ export class CreateUserDto {
   hometown?: string;
 
   username?: string;
-  email?: string;
+  email: string;
   phone?: string;
 
   @IsNotEmpty({ message: '密码不能为空' })

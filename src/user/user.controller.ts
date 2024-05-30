@@ -1,19 +1,18 @@
 import { Body, Controller, Delete, Get, Param, Put } from '@nestjs/common';
 import { UserService } from './user.service';
-import { User as UserModel } from '@prisma/client';
-import { UpdateUserDto } from './dto/user.dto';
+import { UpdateUserDto, UserReturn } from './dto/user.dto';
 
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Get()
-  async getUsers(): Promise<UserModel[]> {
+  async getUsers(): Promise<UserReturn[]> {
     return await this.userService.findAllUsers();
   }
 
   @Get(':id')
-  async getUser(@Param('id') id: string): Promise<UserModel | null> {
+  async getUser(@Param('id') id: string): Promise<UserReturn | null> {
     return await this.userService.findUserById(id);
   }
 
@@ -21,12 +20,12 @@ export class UserController {
   async updateUser(
     @Param('id') id: string,
     @Body() @Body() updateUserDto: UpdateUserDto,
-  ): Promise<UserModel> {
+  ): Promise<UserReturn> {
     return await this.userService.updateUser(id, updateUserDto);
   }
 
   @Delete(':id')
-  async deleteUser(@Param('id') id: string): Promise<UserModel> {
+  async deleteUser(@Param('id') id: string): Promise<UserReturn> {
     return await this.userService.deleteUser(id);
   }
 }

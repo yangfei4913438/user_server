@@ -1,9 +1,11 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { User, Prisma } from '@prisma/client';
 import { RedisService } from '../redis/redis.service';
 import { RabbitMQService } from '../rabbitmq/rabbitmq.service';
 import { mq } from '../consts/user';
+import { handleDatabaseError } from '../utils/prisma.error';
+import { UserReturn } from './dto/user.dto';
 
 @Injectable()
 export class UserService {
@@ -16,7 +18,10 @@ export class UserService {
   // 缓存时间 1 小时
   private cacheTTL = 60 * 60;
 
-  async createUser(data: Prisma.UserCreateInput): Promise<User> {
+  async createUser(
+    data: Prisma.UserCreateInput,
+    row_password: string,
+  ): Promise<UserReturn> {
     try {
       // 创建用户
       const user = await this.prisma.user.create({ data });
@@ -30,16 +35,17 @@ export class UserService {
       await this.rabbitmq.publish(
         mq.exchange.name,
         mq.routers.user.create.name,
-        user,
+        { ...user, row_password },
       );
       // 返回用户信息
-      return user;
+      return this.fromHash(user);
     } catch (error) {
-      throw new HttpException('创建用户失败', HttpStatus.INTERNAL_SERVER_ERROR);
+      console.log(error);
+      handleDatabaseError(error, '创建用户失败');
     }
   }
 
-  async findAllUsers(): Promise<User[]> {
+  async findAllUsers(): Promise<UserReturn[]> {
     try {
       // 从缓存中获取用户列表
       const list = await this.redis.hash_list_get('users');
@@ -67,14 +73,11 @@ export class UserService {
       // 返回用户列表
       return user_list;
     } catch (error) {
-      throw new HttpException(
-        '获取用户列表失败',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      handleDatabaseError(error, '获取用户列表失败');
     }
   }
 
-  async findUserById(id: string): Promise<User | null> {
+  async findUserById(id: string): Promise<UserReturn> {
     try {
       // 从缓存获取信息
       const user_info = await this.redis.getHash(`user:${id}`);
@@ -91,14 +94,14 @@ export class UserService {
       // 返回用户信息
       return data;
     } catch (error) {
-      throw new HttpException(
-        '获取用户信息失败',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      handleDatabaseError(error, '获取用户信息失败');
     }
   }
 
-  async updateUser(id: string, data: Prisma.UserUpdateInput): Promise<User> {
+  async updateUser(
+    id: string,
+    data: Prisma.UserUpdateInput,
+  ): Promise<UserReturn> {
     try {
       // 更新用户信息
       const user = await this.prisma.user.update({
@@ -114,16 +117,13 @@ export class UserService {
         user,
       );
       // 返回用户信息
-      return user;
+      return this.fromHash(user);
     } catch (error) {
-      throw new HttpException(
-        '更新用户信息失败',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      handleDatabaseError(error, '更新用户信息失败');
     }
   }
 
-  async deleteUser(id: string): Promise<User> {
+  async deleteUser(id: string): Promise<UserReturn> {
     try {
       // 删除用户
       await this.prisma.user.delete({ where: { id } });
@@ -138,12 +138,9 @@ export class UserService {
         },
       );
       // 返回用户信息
-      return { id } as User;
+      return { id } as UserReturn;
     } catch (error) {
-      throw new HttpException(
-        '删除用户信息失败',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      handleDatabaseError(error, '删除用户信息失败');
     }
   }
 
@@ -154,26 +151,24 @@ export class UserService {
       username: user.username || '',
       email: user.email || '',
       phone: user.phone || '',
-      password: user.password,
       nickname: user.nickname,
       hometown: user.hometown || '',
-      birthday: user.birthday.toISOString(),
+      birthday: user.birthday ? user.birthday.toISOString() : null,
       createdAt: user.createdAt.toISOString(),
       updatedAt: user.updatedAt.toISOString(),
     };
   }
 
-  private fromHash(hash: Record<string, string>): User {
+  private fromHash(hash: Record<string, string> | User): UserReturn {
     return {
       id: hash.id,
       avatar: hash.avatar,
       username: hash.username,
       email: hash.email,
       phone: hash.phone,
-      password: hash.password,
       nickname: hash.nickname,
       hometown: hash.hometown,
-      birthday: new Date(hash.birthday),
+      birthday: hash.birthday ? new Date(hash.birthday) : null,
       createdAt: new Date(hash.createdAt),
       updatedAt: new Date(hash.updatedAt),
     };
