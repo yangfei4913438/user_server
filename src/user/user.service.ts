@@ -1,14 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { User, Prisma } from '@prisma/client';
 import { RedisService } from '../redis/redis.service';
 import { RabbitMQService } from '../rabbitmq/rabbitmq.service';
 import { mq } from '../consts/user';
 import { handleDatabaseError } from '../utils/prisma.error';
-import { UserReturn } from './dto/user.dto';
+import { UpdateUserDto, UserReturn } from './dto/user.dto';
 
 @Injectable()
 export class UserService {
+  private readonly logger = new Logger(UserService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
@@ -71,7 +73,7 @@ export class UserService {
       );
 
       // 返回用户列表
-      return user_list;
+      return user_list.map((user) => this.filterPassword(user));
     } catch (error) {
       handleDatabaseError(error, '获取用户列表失败');
     }
@@ -92,16 +94,19 @@ export class UserService {
       // 缓存用户信息
       await this.redis.setHash(`user:${id}`, this.toHash(data), this.cacheTTL);
       // 返回用户信息
-      return data;
+      return this.filterPassword(data);
     } catch (error) {
       handleDatabaseError(error, '获取用户信息失败');
     }
   }
 
-  async updateUser(
-    id: string,
-    data: Prisma.UserUpdateInput,
-  ): Promise<UserReturn> {
+  async updateUser(id: string, data: UpdateUserDto): Promise<UserReturn> {
+    // 先看有没有用户
+    const old_user = await this.findUserById(id);
+    if (!old_user) {
+      throw new HttpException('需要更新的用户不存在!', HttpStatus.NOT_FOUND);
+    }
+
     try {
       // 更新用户信息
       const user = await this.prisma.user.update({
@@ -114,51 +119,127 @@ export class UserService {
       await this.rabbitmq.publish(
         mq.exchange.name,
         mq.routers.user.update.name,
-        user,
+        { ...data, email: user.email, id: user.id, updatedAt: user.updatedAt },
       );
       // 返回用户信息
-      return this.fromHash(user);
+      return this.filterPassword(user);
     } catch (error) {
       handleDatabaseError(error, '更新用户信息失败');
     }
   }
 
-  async deleteUser(id: string): Promise<UserReturn> {
+  // 注销用户
+  async cancelUser(id: string) {
+    // 先看有没有用户
+    const old_user = await this.findUserById(id);
+    if (!old_user) {
+      throw new HttpException('用户不存在!', HttpStatus.NOT_FOUND);
+    }
     try {
-      // 删除用户
-      await this.prisma.user.delete({ where: { id } });
-      // 删除缓存
-      await this.redis.del(`user:${id}`);
-      // 消息队列，处理用户删除消息
+      // 更新用户信息
+      const user = await this.prisma.user.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
+      // 因为只是更新删除时间，删除时间也不会返回给客户端，所以，这里不需要更新缓存。
+      // 消息队列，处理用户更新消息
       await this.rabbitmq.publish(
         mq.exchange.name,
-        mq.routers.user.delete.name,
-        {
-          id,
-        },
+        mq.routers.user.cancel.name,
+        { email: user.email, id: user.id, deletedAt: user.deletedAt },
       );
       // 返回用户信息
-      return { id } as UserReturn;
+      return this.filterPassword(user);
+    } catch (error) {
+      handleDatabaseError(error, '注销用户信息失败');
+    }
+  }
+
+  // 清理用户
+  async deleteUser(): Promise<void> {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    try {
+      // 先查询出要删掉的数据
+      const oldData = await this.prisma.user.findMany({
+        where: {
+          deletedAt: {
+            lt: thirtyDaysAgo,
+            not: null,
+          },
+        },
+        select: {
+          id: true,
+          email: true,
+        },
+      });
+      // 删除注销超过30天的用户
+      await this.prisma.user.deleteMany({
+        where: {
+          deletedAt: {
+            lt: thirtyDaysAgo,
+            not: null,
+          },
+        },
+      });
+
+      // 清理相关缓存
+      for (const user of oldData) {
+        // 清理列表中的用户缓存
+        await this.redis.hash_list_del_by_id('users', user.id);
+        // 清理单独的用户缓存
+        await this.redis.del(`user:${user.id}`);
+        // 消息队列，处理用户删除消息
+        await this.rabbitmq.publish(
+          mq.exchange.name,
+          mq.routers.user.delete.name,
+          {
+            id: user.id,
+            email: user.email,
+          },
+        );
+      }
+      return;
     } catch (error) {
       handleDatabaseError(error, '删除用户信息失败');
     }
   }
 
+  // 数据库的数据，直接过滤
+  private filterPassword(user: User): UserReturn {
+    return {
+      id: user.id,
+      avatar: user.avatar || '',
+      username: user.username,
+      email: user.email,
+      phone: user.phone || '',
+      nickname: user.nickname,
+      hometown: user.hometown || '',
+      birthday: user.birthday,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      deletedAt: user.deletedAt,
+    };
+  }
+
+  // 存入redis，转为字符串
   private toHash(user: User): Record<string, string> {
     return {
       id: user.id,
       avatar: user.avatar || '',
-      username: user.username || '',
-      email: user.email || '',
+      username: user.username,
+      email: user.email,
       phone: user.phone || '',
       nickname: user.nickname,
       hometown: user.hometown || '',
       birthday: user.birthday ? user.birthday.toISOString() : null,
       createdAt: user.createdAt.toISOString(),
       updatedAt: user.updatedAt.toISOString(),
+      deletedAt: user.deletedAt.toISOString(),
     };
   }
 
+  // 从字符串转回正常数据
   private fromHash(hash: Record<string, string> | User): UserReturn {
     return {
       id: hash.id,
@@ -171,6 +252,7 @@ export class UserService {
       birthday: hash.birthday ? new Date(hash.birthday) : null,
       createdAt: new Date(hash.createdAt),
       updatedAt: new Date(hash.updatedAt),
+      deletedAt: hash.deletedAt ? new Date(hash.deletedAt) : null,
     };
   }
 }

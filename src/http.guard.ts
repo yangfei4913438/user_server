@@ -5,19 +5,22 @@ import {
   HttpStatus,
   Injectable,
   Logger,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from './decorators/public.decorator';
+import { RedisService } from './redis/redis.service';
 
 @Injectable()
-export class AppGuard implements CanActivate {
-  private readonly logger = new Logger(AppGuard.name);
+export class HttpGuard implements CanActivate {
+  private readonly logger = new Logger(HttpGuard.name);
 
   constructor(
     private readonly jwtService: JwtService,
     private readonly reflector: Reflector,
+    private readonly redis: RedisService,
   ) {}
 
   async canActivate(context: ExecutionContext) {
@@ -61,20 +64,37 @@ export class AppGuard implements CanActivate {
     // 获取 token
     const token = this.extractTokenFromHandler(request);
     if (!token) {
-      throw new HttpException('无效的请求', HttpStatus.FORBIDDEN);
+      throw new UnauthorizedException('没有请求权限');
     }
     try {
       // 解密，拿到用户ID.
       // 将用户ID，添加到请求上下文中
-      request['user_id'] = await this.jwtService.verifyAsync(token, {
+      const data = this.jwtService.verify(token, {
         secret: process.env.JWT_SECRET,
       });
+      // 将用户id写入请求上下文
+      request['user_id'] = data['id'];
     } catch (err) {
       // token 异常才会解密失败
       console.error('token解密失败:', err);
-      throw new HttpException('token 无效', HttpStatus.FORBIDDEN);
+      throw new UnauthorizedException('token已经过期, 请重新登陆');
     }
-    // 没有问题，就返回 true
+
+    // 判断是否在白名单中
+    const exist_token = await this.redis.get(
+      `access_token:${request['user_id']}`,
+    );
+    // 白名单没记录，一般来说不存在，登陆和刷新token都会进行更新。
+    // 遇到了，当成过期处理，让用户重新登陆即可。
+    if (!exist_token) {
+      throw new UnauthorizedException('token已经过期, 请重新登陆');
+    }
+    // token 没过期，但是和白名单的值不一样，表示重新登陆过了，或者token被刷新了但请求上旧的。
+    // 这种一般就是在其他设备登陆了。
+    if (exist_token !== token) {
+      throw new UnauthorizedException('该用户已在其他设备上登陆，请重新登陆');
+    }
+
     return true;
   }
 

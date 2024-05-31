@@ -1,66 +1,163 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserService } from '../user/user.service';
 import * as argon2 from 'argon2';
 import { AuthLoginDto, AuthRegisterDto } from './dto/auth.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
+import { mq, token } from '../consts/user';
+import { RabbitMQService } from '../rabbitmq/rabbitmq.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly userService: UserService,
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
+    private readonly rabbitmq: RabbitMQService,
   ) {}
 
   // 登录
   async login(user: AuthLoginDto) {
-    if (!user.username && !user.email && !user.phone) {
+    if (!user.username && !user.email) {
       throw new HttpException('缺少登陆账号', HttpStatus.FORBIDDEN);
     }
-    if (!user.password) {
-      throw new HttpException('缺少登陆密码', HttpStatus.FORBIDDEN);
+    if (!user.password && !user.code) {
+      throw new HttpException('缺少登陆密码或验证码', HttpStatus.FORBIDDEN);
     }
-
-    // 密码处理
-    const hashedPassword = await argon2.hash(user.password);
 
     // 基础信息
     let where = null;
     if (user.username) {
-      where = { username: user.username, password: hashedPassword };
+      where = { username: user.username };
     } else if (user.email) {
-      where = { email: user.email, password: hashedPassword };
-    } else if (user.phone) {
-      where = { phone: user.phone, password: hashedPassword };
+      where = { email: user.email };
+    } else if (user.email && user.username) {
+      where = { email: user.email, username: user.username };
     }
 
     // 从数据库中获取用户信息
     const userInfo = await this.prisma.user.findUnique({
       where,
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        phone: true,
-        avatar: true,
-        nickname: true,
-        birthday: true,
-        hometown: true,
-        createdAt: true,
-        updatedAt: true,
-      },
     });
     // 判断是否存在这个用户
     if (!userInfo) {
-      return null;
+      this.logger.log('用户登陆：不存在的账号');
+      throw new HttpException('无效的账号或密码', HttpStatus.FORBIDDEN);
     }
 
+    // 判断验证码是否存在
+    if (user.code) {
+      // 验证邮件是否存在
+      if (!user.email) {
+        this.logger.log(
+          '用户登陆：无效的参数组合，提供了验证码没有提供邮件地址！',
+        );
+        throw new HttpException('无效的登陆参数！', HttpStatus.FORBIDDEN);
+      }
+      // 验证验证码是否匹配
+      const code = await this.redis.get(user.email);
+      if (user.code !== code) {
+        this.logger.log('用户登陆：验证码不匹配');
+        throw new HttpException('无效的验证码', HttpStatus.FORBIDDEN);
+      } else {
+        // 验证通过后，删除验证码
+        await this.redis.del(user.email);
+      }
+    }
+    // 判断密码是否存在, 密码和验证码，只会同时存在一个。
+    else if (user.password) {
+      const passOk = await argon2.verify(userInfo.password, user.password);
+      if (!passOk) {
+        this.logger.log('用户登陆：密码不匹配');
+        throw new HttpException('无效的账号或密码', HttpStatus.FORBIDDEN);
+      }
+    }
+
+    // 验证通过
+    // 判断用户是否为注销状态
+    if (userInfo.deletedAt) {
+      // 移除注销状态
+      await this.prisma.user.update({
+        where: { id: userInfo.id },
+        data: { deletedAt: null },
+      });
+      // 消息队列，注销流程取消通知，审计日志记录
+      await this.rabbitmq.publish(
+        mq.exchange.name,
+        mq.routers.user.uncanceled.name,
+        {
+          email: userInfo.email,
+          id: userInfo.id,
+          updatedAt: userInfo.updatedAt,
+        },
+      );
+    }
+
+    // 密码字段，不返回给用户
+    delete userInfo.password;
+    // 生成访问token
+    const access_token = this.jwtService.sign(
+      { id: userInfo.id }, // 只存储用户id
+      { expiresIn: token.expiresIn.access }, // 4小时过期
+    );
+    // 存储登陆信息，白名单，查不到的禁止登陆
+    await this.redis.set(
+      token.redis_whitelist_key(userInfo.id),
+      access_token,
+      token.expires.access,
+    );
+    // 返回数据
     return {
-      // 使用 JwtService 生成一个 token, 返回给用户
-      access_token: this.jwtService.sign({ id: userInfo.id }),
+      // 访问token，用来鉴权
+      access_token,
+      // 当访问token过期后，使用刷新token来更新访问token
+      refresh_token: this.jwtService.sign(
+        { id: userInfo.id }, // 只存储用户id
+        { expiresIn: token.expiresIn.refresh }, // 7天过期
+      ),
       userInfo,
     };
+  }
+
+  // 刷新token
+  async refreshToken(refreshToken: string) {
+    if (!refreshToken) {
+      throw new HttpException('无效的刷新token', HttpStatus.FORBIDDEN);
+    }
+    try {
+      const user = this.jwtService.verify(refreshToken);
+      // 新的访问token
+      const access_token = this.jwtService.sign(
+        { id: user.id }, // 只存储用户id
+        { expiresIn: token.expiresIn.access }, // 12小时过期
+      );
+      // 存储登陆信息，白名单，查不到的禁止登陆
+      await this.redis.set(
+        token.redis_whitelist_key(user.id),
+        access_token,
+        token.expires.access,
+      );
+      return {
+        access_token,
+        // 有效期是指，距离上一次访问，最大可用期。也就是说，一旦刷新，就可以继续保持7天。
+        refresh_token: this.jwtService.sign(
+          { id: user.id }, // 只存储用户id
+          { expiresIn: token.expiresIn.refresh }, // 7天过期
+        ),
+      };
+    } catch (error) {
+      throw new UnauthorizedException('刷新 token 已失效，请重新登录');
+    }
   }
 
   // 注册
