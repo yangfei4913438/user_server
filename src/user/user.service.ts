@@ -33,6 +33,13 @@ export class UserService {
         this.toHash(user),
         this.cacheTTL,
       );
+      // 查看内存列表有没有
+      const list = await this.redis.hash_list_get('users');
+      if (list.length === 0) {
+        await this.redis.hash_list_push('users', [user], this.cacheTTL);
+      } else {
+        await this.redis.hash_list_append('users', user.id, user);
+      }
       // 消息队列，处理用户创建消息
       await this.rabbitmq.publish(
         mq.exchange.name,
@@ -87,7 +94,9 @@ export class UserService {
         return this.fromHash(user_info);
       }
       // 缓存不存在，从数据库中获取
-      const data = await this.prisma.user.findUnique({ where: { id } });
+      const data = id
+        ? await this.prisma.user.findUnique({ where: { id } })
+        : null;
       if (!data) {
         return null;
       }
@@ -115,6 +124,13 @@ export class UserService {
       });
       // 缓存用户信息
       await this.redis.setHash(`user:${id}`, this.toHash(user), this.cacheTTL);
+      // 更新列表缓存
+      const list = await this.redis.hash_list_get('users');
+      if (list.length === 0) {
+        await this.redis.hash_list_push('users', [user], this.cacheTTL);
+      } else {
+        await this.redis.hash_list_update_by_id('users', user.id, user);
+      }
       // 消息队列，处理用户更新消息
       await this.rabbitmq.publish(
         mq.exchange.name,
@@ -141,7 +157,13 @@ export class UserService {
         where: { id },
         data: { deletedAt: new Date() },
       });
-      // 因为只是更新删除时间，删除时间也不会返回给客户端，所以，这里不需要更新缓存。
+      // 更新列表缓存
+      const list = await this.redis.hash_list_get('users');
+      if (list.length === 0) {
+        await this.redis.hash_list_push('users', [user], this.cacheTTL);
+      } else {
+        await this.redis.hash_list_update_by_id('users', user.id, user);
+      }
       // 消息队列，处理用户更新消息
       await this.rabbitmq.publish(
         mq.exchange.name,
@@ -235,7 +257,7 @@ export class UserService {
       birthday: user.birthday ? user.birthday.toISOString() : null,
       createdAt: user.createdAt.toISOString(),
       updatedAt: user.updatedAt.toISOString(),
-      deletedAt: user.deletedAt.toISOString(),
+      deletedAt: user.deletedAt ? user.deletedAt.toISOString() : null,
     };
   }
 

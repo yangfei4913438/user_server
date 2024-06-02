@@ -8,6 +8,43 @@ export const mq = {
   },
   // 路由
   routers: {
+    // 角色
+    role: {
+      // 创建角色
+      create: {
+        name: 'role.created',
+        queue: 'role_created_queue',
+      },
+      // 更新角色
+      update: {
+        name: 'role.updated',
+        queue: 'role_updated_queue',
+      },
+      // 删除角色
+      delete: {
+        name: 'role.deleted',
+        queue: 'role_deleted_queue',
+      },
+    },
+    // 权限
+    permission: {
+      // 创建权限
+      create: {
+        name: 'permission.created',
+        queue: 'permission_created_queue',
+      },
+      // 更新权限
+      update: {
+        name: 'permission.updated',
+        queue: 'permission_updated_queue',
+      },
+      // 删除权限
+      delete: {
+        name: 'permission.deleted',
+        queue: 'permission_deleted_queue',
+      },
+    },
+    // 用户
     user: {
       // 创建用户
       create: {

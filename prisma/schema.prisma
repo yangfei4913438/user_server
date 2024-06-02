@@ -33,11 +33,22 @@ model User {
   @@map("users")
 }
 
+/// 角色的类型
+enum RoleType {
+  administrator
+  editor
+  member
+  guest
+}
+
 /// 角色表，存储角色的基本信息
 model Role {
   id             String           @id @default(uuid()) /// 角色ID
+  type           RoleType         @unique  /// 角色类型：administrator ｜ editor ｜ member ｜ guest
   name           String           @unique @db.VarChar(100) /// 角色名称，唯一
   description    String?          @db.VarChar(255) /// 角色描述
+  createdAt      DateTime         @default(now()) @map("created_at") /// 创建时间
+  updatedAt      DateTime         @default(now()) @updatedAt @map("updated_at") /// 更新时间
   UserRole       UserRole[]
   RolePermission RolePermission[]
 
@@ -55,11 +66,23 @@ model UserRole {
   @@map("user_roles")
 }
 
+/// 权限的类型
+enum PermissionType {
+  admin
+  create
+  edit
+  delete
+  view
+}
+
 /// 权限表，存储权限的基本信息
 model Permission {
   id             String           @id @default(uuid()) /// 权限ID
   name           String           @unique @db.VarChar(100) /// 权限名称，唯一
+  type           PermissionType   @unique  /// 权限类型: 'admin' | 'create' | 'edit' | 'delete' | 'view'
   description    String?          @db.VarChar(255) /// 权限描述
+  createdAt      DateTime         @default(now()) @map("created_at") /// 创建时间
+  updatedAt      DateTime         @default(now()) @updatedAt @map("updated_at") /// 更新时间
   RolePermission RolePermission[]
 
   @@map("permissions")
@@ -85,7 +108,7 @@ model AuditLog {
   result    String   @db.LongText /// 结果
   userId    String   @map("user_id") /// 用户ID, 外键，连接用户表，改动点
   createdAt DateTime @default(now()) @map("created_at") /// 创建时间
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade )
 
   @@map("audit_logs")
 }

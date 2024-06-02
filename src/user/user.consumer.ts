@@ -48,7 +48,7 @@ export class UserConsumer {
       .create({
         data: {
           action: mq.routers.user.create.name,
-          result: `创建成功！用户id: ${rest.id}, 创建时间: ${new Date(rest.createdAt).toISOString()}`,
+          result: `用户创建成功！创建时间: ${new Date(rest.createdAt).toISOString()}`,
           userId: user.id,
         },
       })
@@ -92,7 +92,7 @@ export class UserConsumer {
       .create({
         data: {
           action: mq.routers.user.update.name,
-          result: `更新成功！用户id: ${id}, 更新时间: ${new Date(updatedAt).toISOString()}`,
+          result: `用户更新成功！更新时间: ${new Date(updatedAt).toISOString()}`,
           userId: id,
         },
       })
@@ -133,7 +133,7 @@ export class UserConsumer {
     await this.prisma.auditLog.create({
       data: {
         action: mq.routers.user.cancel.name,
-        result: `注销成功！用户id: ${id}, 注销时间: ${new Date(deletedAt).toISOString()}`,
+        result: `用户注销成功！注销时间: ${new Date(deletedAt).toISOString()}`,
         userId: id,
       },
     });
@@ -172,7 +172,7 @@ export class UserConsumer {
     await this.prisma.auditLog.create({
       data: {
         action: mq.routers.user.cancel.name,
-        result: `取消注销成功！用户id: ${id}, 取消注销时间: ${new Date(updatedAt).toISOString()}`,
+        result: `用户取消注销成功！取消注销时间: ${new Date(updatedAt).toISOString()}`,
         userId: id,
       },
     });
@@ -207,7 +207,7 @@ export class UserConsumer {
     await this.prisma.auditLog.create({
       data: {
         action: mq.routers.user.delete.name,
-        result: `删除成功！用户id: ${id}, 删除时间: ${new Date().toISOString()}`,
+        result: `用户删除成功！删除时间: ${new Date().toISOString()}`,
         userId: id,
       },
     });

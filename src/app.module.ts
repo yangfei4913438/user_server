@@ -11,6 +11,8 @@ import { HttpGuard } from './http.guard';
 import { HttpTransformInterceptor } from './http.transform.interceptor';
 import { HttpExceptionFilter } from './http.exception.filter';
 import { TaskModule } from './task/task.module';
+import { PermissionModule } from './permission/permission.module';
+import { RoleModule } from './role/role.module';
 
 @Module({
   imports: [
@@ -25,6 +27,8 @@ import { TaskModule } from './task/task.module';
     AuthModule,
     EmailModule,
     TaskModule,
+    PermissionModule,
+    RoleModule,
   ],
   controllers: [],
   providers: [
