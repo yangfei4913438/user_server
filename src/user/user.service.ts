@@ -87,6 +87,7 @@ export class UserService {
   }
 
   async findUserById(id: string): Promise<UserReturn> {
+    if (!id) return null;
     try {
       // 从缓存获取信息
       const user_info = await this.redis.getHash(`user:${id}`);
@@ -94,9 +95,7 @@ export class UserService {
         return this.fromHash(user_info);
       }
       // 缓存不存在，从数据库中获取
-      const data = id
-        ? await this.prisma.user.findUnique({ where: { id } })
-        : null;
+      const data = await this.prisma.user.findUnique({ where: { id } });
       if (!data) {
         return null;
       }

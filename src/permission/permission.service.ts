@@ -24,20 +24,19 @@ export class PermissionService {
   private cacheTTL = 60 * 60;
 
   async create(user_id: string, data: PermissionDto): Promise<Permission> {
-    this.logger.log(`user_id:${user_id}, data: ${JSON.stringify(data)}`);
     try {
       // 保存到数据库
-      const permission = (await this.prisma.permission.create({
+      const permission = await this.prisma.permission.create({
         data: {
           name: data.name,
           description: data.description,
           type: data.type,
         },
-      })) as Permission;
+      });
       // 更新缓存
       await this.redis.setHash(
         `permission:${permission.id}`,
-        permission,
+        this.toHash(permission),
         this.cacheTTL,
       );
       // 查看内存列表有没有
@@ -77,7 +76,7 @@ export class PermissionService {
         return list;
       }
       // 没有就从数据库查询
-      const arr = (await this.prisma.permission.findMany()) as Permission[];
+      const arr = await this.prisma.permission.findMany();
       if (arr.length === 0) {
         // 没有就返回空，空值不缓存
         return [];
@@ -93,6 +92,7 @@ export class PermissionService {
   }
 
   async getPermissionById(id: string): Promise<Permission> {
+    if (!id) return null;
     try {
       // 从缓存获取信息
       const permission = this.redis.getHash(`permission:${id}`);
@@ -100,11 +100,7 @@ export class PermissionService {
         return this.fromHash(permission);
       }
       // 没有，从数据库获取
-      const data = id
-        ? ((await this.prisma.permission.findFirst({
-            where: { id },
-          })) as Permission)
-        : null;
+      const data = await this.prisma.permission.findFirst({ where: { id } });
       if (!data) {
         return null;
       }
@@ -133,10 +129,10 @@ export class PermissionService {
 
     try {
       // 更新操作
-      const permission = (await this.prisma.permission.update({
+      const permission = await this.prisma.permission.update({
         where: { id: result.id },
         data,
-      })) as Permission;
+      });
       // 更新缓存
       await this.redis.setHash(
         `permission:${data.id}`,
@@ -178,7 +174,6 @@ export class PermissionService {
     if (!result) {
       throw new HttpException('不存在的权限', HttpStatus.NOT_FOUND);
     }
-    this.logger.log(`result: ${JSON.stringify(result)}`);
     try {
       // 删除数据库的数据
       await this.prisma.permission.delete({
