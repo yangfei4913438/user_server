@@ -99,4 +99,15 @@ export class RoleController {
     const user_id = request['user_id'];
     return await this.roleService.clearPermissions(user_id, role_id);
   }
+
+  @Get('/permissions/:id')
+  @ApiOperation({ summary: '获取角色的权限列表' })
+  @ApiResponse({
+    status: 200,
+    description: '获取角色的权限列表',
+    type: Promise<string[]>,
+  })
+  async getRolePermissions(@Param('id') role_id: string) {
+    return await this.roleService.getRolePermissions(role_id);
+  }
 }

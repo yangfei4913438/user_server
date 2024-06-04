@@ -186,16 +186,30 @@ export class RoleService {
           roleId: role_id,
         },
       });
+      // 新的数据
+      const list = permissionIds
+        // 找出不重复的权限
+        .filter((pid) => !currentList.some((cl) => cl.permissionId === pid))
+        // 构建需要的数据
+        .map((permissionId) => {
+          return { roleId: role_id, permissionId };
+        });
+
       // 添加权限
       await this.prisma.rolePermission.createMany({
-        data: permissionIds
-          // 找出不重复的权限
-          .filter((pid) => !currentList.some((cl) => cl.permissionId === pid))
-          // 构建需要的数据
-          .map((permissionId) => {
-            return { roleId: role_id, permissionId };
-          }),
+        data: list,
       });
+
+      // 添加缓存
+      await this.redis.hash_list_push(
+        `role_permissions:${role_id}`,
+        list.map((item) => ({
+          id: item.roleId + item.permissionId,
+          ...item,
+        })),
+        this.cacheTTL,
+      );
+
       // 通知消息队列
       await this.rabbitmq.publish(
         mq.exchange.name,
@@ -240,12 +254,26 @@ export class RoleService {
             roleId: role_id,
           },
         });
+        // 清理缓存
+        await this.redis.del(`role_permissions:${role_id}`);
+
+        // 新的数据
+        const list = permissionIds.map((permissionId) => {
+          return { roleId: role_id, permissionId };
+        });
         // 添加新的权限
         await prisma.rolePermission.createMany({
-          data: permissionIds.map((permissionId) => {
-            return { roleId: role_id, permissionId };
-          }),
+          data: list,
         });
+        // 更新缓存
+        await this.redis.hash_list_push(
+          `role_permissions:${role_id}`,
+          list.map((item) => ({
+            id: item.roleId + item.permissionId,
+            ...item,
+          })),
+          this.cacheTTL,
+        );
       });
 
       // 通知消息队列
@@ -277,6 +305,9 @@ export class RoleService {
         },
       });
 
+      // 清理缓存
+      await this.redis.del(`role_permissions:${role_id}`);
+
       // 通知消息队列
       await this.rabbitmq.publish(
         mq.exchange.name,
@@ -292,6 +323,41 @@ export class RoleService {
     } catch (error) {
       console.log(error);
       handleDatabaseError(error, '清理权限失败');
+    }
+  }
+
+  // 获取某个角色的所有权限
+  async getRolePermissions(role_id: string) {
+    // 先看缓存有没有
+    const current = await this.redis.hash_list_get(
+      `role_permissions:${role_id}`,
+    );
+    if (current.length > 0) {
+      return current;
+    }
+
+    try {
+      // 从数据库获取
+      const list = await this.prisma.rolePermission.findMany({
+        where: { roleId: role_id },
+      });
+      // 组织数据结构
+      const return_data = list.map((item) => ({
+        id: item.roleId + item.permissionId,
+        role_id: item.roleId,
+        permission_id: item.permissionId,
+      }));
+      // 写入缓存
+      await this.redis.hash_list_push(
+        `role_permissions:${role_id}`,
+        return_data,
+        this.cacheTTL,
+      );
+      // 返回数据
+      return return_data;
+    } catch (error) {
+      console.log(error);
+      handleDatabaseError(error, '获取角色的权限列表失败');
     }
   }
 
