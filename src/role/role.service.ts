@@ -33,7 +33,11 @@ export class RoleService {
         },
       });
       // 存缓存
-      await this.redis.setHash(`role:${user_id}`, this.toHash(role));
+      await this.redis.setHash(
+        `role:${user_id}`,
+        this.toHash(role),
+        this.cacheTTL,
+      );
       // 更新列表
       const list = await this.redis.hash_list_get('roles');
       if (list.length === 0) {

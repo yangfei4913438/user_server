@@ -9,11 +9,11 @@ import {
   Req,
 } from '@nestjs/common';
 import { RoleService } from './role.service';
-import { ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Role, RoleDto, RoleUpdateDto } from './dto/role.dto';
 import { Request } from 'express';
-import { Permission, PermissionDto } from '../permission/dto/permission.dto';
 
+@ApiTags('Role')
 @Controller('role')
 export class RoleController {
   constructor(private readonly roleService: RoleService) {}

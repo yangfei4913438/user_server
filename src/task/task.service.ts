@@ -38,8 +38,8 @@ export class TaskService {
         }
         tasks.push(task);
       }
-      // 存内存
-      await this.redis.hash_list_push('tasks', tasks);
+      // 存内存, 缓存时间 1 小时
+      await this.redis.hash_list_push('tasks', tasks, 60 * 60);
       // 返回数据
       return tasks;
     } catch (e) {
