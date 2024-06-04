@@ -151,27 +151,34 @@ export class AuthService {
     if (!refreshToken) {
       throw new HttpException('无效的刷新token', HttpStatus.FORBIDDEN);
     }
+    // 定义一个局部变量
+    let user_id = '';
     try {
       // 获取token数据
       const data = this.jwtService.verify(refreshToken, {
         secret: process.env.JWT_SECRET,
       });
       // 拿到用户ID
-      const user_id = data['id'];
-      // 确认是否在白名单中
-      const exist = await this.redis.get(
-        token.redis_whitelist_key_refresh(user_id),
-      );
-      if (!exist) {
-        throw new UnauthorizedException('刷新token已经过期, 请重新登陆');
-      }
-      // 返回新token
-      return await this.getTokens(user_id);
+      user_id = data['id'];
     } catch (error) {
       // token 异常才会解密失败
       console.error('刷新token解密失败:', error);
       throw new UnauthorizedException('刷新token已经过期, 请重新登陆');
     }
+
+    // 确认是否在白名单中
+    const exist_token = await this.redis.get(
+      token.redis_whitelist_key_refresh(user_id),
+    );
+    if (!exist_token) {
+      throw new UnauthorizedException('刷新token已经过期, 请重新登陆');
+    }
+    if (exist_token !== refreshToken) {
+      throw new UnauthorizedException('该用户已在其他设备上登陆，请重新登陆');
+    }
+
+    // 返回新token
+    return await this.getTokens(user_id);
   }
 
   // 注册
