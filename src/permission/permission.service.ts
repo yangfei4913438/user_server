@@ -126,8 +126,17 @@ export class PermissionService {
     if (!result) {
       throw new HttpException('不存在的权限', HttpStatus.NOT_FOUND);
     }
+    // 如果更新时间不一致，表示数据被修改过，不能继续更新
+    if (result.updatedAt.getTime() !== data.updatedAt.getTime()) {
+      throw new HttpException(
+        '数据被修改, 更新操作被终止!',
+        HttpStatus.FORBIDDEN,
+      );
+    }
 
     try {
+      // 删掉更新时间，否则数据库内部不会更新更新时间字段。
+      delete data.updatedAt;
       // 更新操作
       const permission = await this.prisma.permission.update({
         where: { id: result.id },

@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsOptional } from 'class-validator';
+import { Transform, TransformFnParams } from 'class-transformer';
 
 type permissionType = 'admin' | 'create' | 'edit' | 'delete' | 'view';
 
@@ -29,6 +30,11 @@ export class PermissionUpdateDto extends PermissionDto {
   @ApiProperty({ description: '权限类型' })
   @IsOptional()
   type: permissionType;
+
+  @ApiProperty({ description: '更新时间' })
+  @IsNotEmpty({ message: '更新时间，不能为空' })
+  @Transform(({ value }: TransformFnParams) => new Date(value))
+  updatedAt: Date;
 }
 
 export class Permission extends PermissionDto {

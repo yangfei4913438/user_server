@@ -1,8 +1,6 @@
 import {
   CanActivate,
   ExecutionContext,
-  HttpException,
-  HttpStatus,
   Injectable,
   Logger,
   UnauthorizedException,
@@ -12,6 +10,7 @@ import { Request } from 'express';
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from './decorators/public.decorator';
 import { RedisService } from './redis/redis.service';
+import { token as tokenConst } from './consts/user';
 
 @Injectable()
 export class HttpGuard implements CanActivate {
@@ -82,7 +81,7 @@ export class HttpGuard implements CanActivate {
 
     // 判断是否在白名单中
     const exist_token = await this.redis.get(
-      `access_token:${request['user_id']}`,
+      tokenConst.redis_whitelist_key(request['user_id']),
     );
     // 白名单没记录，一般来说不存在，登陆和刷新token都会进行更新。
     // 遇到了，当成过期处理，让用户重新登陆即可。

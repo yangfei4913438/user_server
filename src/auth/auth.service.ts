@@ -105,27 +105,44 @@ export class AuthService {
 
     // 密码字段，不返回给用户
     delete userInfo.password;
-    // 生成访问token
-    const access_token = this.jwtService.sign(
-      { id: userInfo.id }, // 只存储用户id
-      { expiresIn: token.expiresIn.access }, // 4小时过期
-    );
-    // 存储登陆信息，白名单，查不到的禁止登陆
-    await this.redis.set(
-      token.redis_whitelist_key(userInfo.id),
-      access_token,
-      token.expires.access,
-    );
+    // 获取token
+    const tokens = await this.getTokens(userInfo.id);
     // 返回数据
     return {
       // 访问token，用来鉴权
-      access_token,
+      access_token: tokens.access_token,
       // 当访问token过期后，使用刷新token来更新访问token
-      refresh_token: this.jwtService.sign(
-        { id: userInfo.id }, // 只存储用户id
-        { expiresIn: token.expiresIn.refresh }, // 7天过期
-      ),
+      refresh_token: tokens.refresh_token,
       userInfo,
+    };
+  }
+
+  private async getTokens(id: string) {
+    // 生成访问token
+    const access_token = this.jwtService.sign(
+      { id }, // 只存储用户id
+      { expiresIn: token.expiresIn.access, secret: process.env.JWT_SECRET }, // 4小时过期
+    );
+    // 生成刷新token
+    const refresh_token = this.jwtService.sign(
+      { id }, // 只存储用户id
+      { expiresIn: token.expiresIn.refresh, secret: process.env.JWT_SECRET }, // 7天过期
+    );
+    // 存储登陆信息，白名单，查不到的禁止登陆
+    await this.redis.set(
+      token.redis_whitelist_key(id),
+      access_token,
+      token.expires.access,
+    );
+    // 刷新token白名单
+    await this.redis.set(
+      token.redis_whitelist_key_refresh(id),
+      refresh_token,
+      token.expires.refresh,
+    );
+    return {
+      access_token,
+      refresh_token,
     };
   }
 
@@ -135,28 +152,25 @@ export class AuthService {
       throw new HttpException('无效的刷新token', HttpStatus.FORBIDDEN);
     }
     try {
-      const user = this.jwtService.verify(refreshToken);
-      // 新的访问token
-      const access_token = this.jwtService.sign(
-        { id: user.id }, // 只存储用户id
-        { expiresIn: token.expiresIn.access }, // 12小时过期
+      // 获取token数据
+      const data = this.jwtService.verify(refreshToken, {
+        secret: process.env.JWT_SECRET,
+      });
+      // 拿到用户ID
+      const user_id = data['id'];
+      // 确认是否在白名单中
+      const exist = await this.redis.get(
+        token.redis_whitelist_key_refresh(user_id),
       );
-      // 存储登陆信息，白名单，查不到的禁止登陆
-      await this.redis.set(
-        token.redis_whitelist_key(user.id),
-        access_token,
-        token.expires.access,
-      );
-      return {
-        access_token,
-        // 有效期是指，距离上一次访问，最大可用期。也就是说，一旦刷新，就可以继续保持7天。
-        refresh_token: this.jwtService.sign(
-          { id: user.id }, // 只存储用户id
-          { expiresIn: token.expiresIn.refresh }, // 7天过期
-        ),
-      };
+      if (!exist) {
+        throw new UnauthorizedException('刷新token已经过期, 请重新登陆');
+      }
+      // 返回新token
+      return await this.getTokens(user_id);
     } catch (error) {
-      throw new UnauthorizedException('刷新 token 已失效，请重新登录');
+      // token 异常才会解密失败
+      console.error('刷新token解密失败:', error);
+      throw new UnauthorizedException('刷新token已经过期, 请重新登陆');
     }
   }
 

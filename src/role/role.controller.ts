@@ -12,6 +12,7 @@ import { RoleService } from './role.service';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Role, RoleDto, RoleUpdateDto } from './dto/role.dto';
 import { Request } from 'express';
+import { Permission, PermissionDto } from '../permission/dto/permission.dto';
 
 @Controller('role')
 export class RoleController {
@@ -53,5 +54,49 @@ export class RoleController {
   async delete(@Req() request: Request, @Param('id') id: string) {
     const user_id = request['user_id'];
     return await this.roleService.delete(user_id, id);
+  }
+
+  @Post('/add_permissions/:id')
+  @ApiOperation({ summary: '添加角色的权限' })
+  @ApiResponse({
+    status: 200,
+    description: '批量添加角色的权限',
+    type: Promise<string>,
+  })
+  async addPermission(
+    @Req() request: Request,
+    @Param('id') role_id: string,
+    @Body() ids: string[],
+  ) {
+    const user_id = request['user_id'];
+    return await this.roleService.addPermissions(user_id, role_id, ids);
+  }
+
+  @Put('/update_permissions/:id')
+  @ApiOperation({ summary: '修改角色的权限' })
+  @ApiResponse({
+    status: 200,
+    description: '批量修改角色的权限',
+    type: Promise<string>,
+  })
+  async updatePermission(
+    @Req() request: Request,
+    @Param('id') role_id: string,
+    @Body() ids: string[],
+  ) {
+    const user_id = request['user_id'];
+    return await this.roleService.updatePermissions(user_id, role_id, ids);
+  }
+
+  @Delete('/clear_permissions/:id')
+  @ApiOperation({ summary: '清空角色的权限' })
+  @ApiResponse({
+    status: 200,
+    description: '批量清空角色的所有权限',
+    type: Promise<string>,
+  })
+  async clearPermission(@Req() request: Request, @Param('id') role_id: string) {
+    const user_id = request['user_id'];
+    return await this.roleService.clearPermissions(user_id, role_id);
   }
 }

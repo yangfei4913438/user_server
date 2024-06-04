@@ -25,6 +25,21 @@ export const mq = {
         name: 'role.deleted',
         queue: 'role_deleted_queue',
       },
+      // 角色添加权限
+      addedPermissions: {
+        name: 'role.added_permissions',
+        queue: 'role_added_permissions',
+      },
+      // 角色更新或者清理权限
+      updatedPermissions: {
+        name: 'role.updated_permissions',
+        queue: 'role_updated_permissions_queue',
+      },
+      // 清空角色的权限
+      clearPermissions: {
+        name: 'role.clear_permissions',
+        queue: 'role_clear_permissions_queue',
+      },
     },
     // 权限
     permission: {
@@ -71,6 +86,16 @@ export const mq = {
         name: 'user.deleted',
         queue: 'user_deleted_queue',
       },
+      // 添加角色
+      addedRoles: {
+        name: 'user.added_roles',
+        queue: 'user_added_roles_queue',
+      },
+      // 更新或者清理角色
+      updatedRoles: {
+        name: 'user.updated_roles',
+        queue: 'user_updated_roles_queue',
+      },
     },
   },
 } as const; // 声明为const, 便于 ide 的注释提示
@@ -92,4 +117,6 @@ export const token = {
   },
   // redis 中的白名单key
   redis_whitelist_key: (id: string) => `access_token:${id}`,
+  // 刷新token
+  redis_whitelist_key_refresh: (id: string) => `refresh_token:${id}`,
 } as const;
