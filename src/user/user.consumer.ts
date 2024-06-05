@@ -212,4 +212,45 @@ export class UserConsumer {
       },
     });
   }
+
+  @RabbitSubscribe({
+    exchange: mq.exchange.name,
+    routingKey: mq.routers.user.create.name,
+    queue: mq.routers.user.create.queue,
+  })
+  async handleUserCreateRoles(data: {
+    user_id: string;
+    target_user_id: string;
+    role_ids: string[];
+  }) {
+    // 记录日志
+    await this.prisma.auditLog.create({
+      data: {
+        action: mq.routers.user.create.name,
+        result: `用户 ${data.target_user_id} 创建角色成功！角色id：${data.role_ids.join(',')}, 删除时间: ${new Date().toISOString()}`,
+        userId: data.user_id,
+      },
+    });
+  }
+
+  @RabbitSubscribe({
+    exchange: mq.exchange.name,
+    routingKey: mq.routers.user.updatedRoles.name,
+    queue: mq.routers.user.updatedRoles.queue,
+  })
+  async handleUserUpdateRoles(data: {
+    user_id: string;
+    target_user_id: string;
+    role_ids: string[];
+    updatedAt: Date;
+  }) {
+    // 记录日志
+    await this.prisma.auditLog.create({
+      data: {
+        action: mq.routers.user.updatedRoles.name,
+        result: `用户 ${data.target_user_id} 更新角色成功！角色id：${data.role_ids.join(',')}, 删除时间: ${new Date(data.updatedAt).toISOString()}`,
+        userId: data.user_id,
+      },
+    });
+  }
 }

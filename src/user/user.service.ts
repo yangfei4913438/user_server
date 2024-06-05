@@ -6,6 +6,7 @@ import { RabbitMQService } from '../rabbitmq/rabbitmq.service';
 import { mq } from '../consts/user';
 import { handleDatabaseError } from '../utils/prisma.error';
 import { UpdateUserDto, UserReturn } from './dto/user.dto';
+import { RoleService } from '../role/role.service';
 
 @Injectable()
 export class UserService {
@@ -15,6 +16,7 @@ export class UserService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     private readonly rabbitmq: RabbitMQService,
+    private readonly roleService: RoleService,
   ) {}
 
   // 缓存时间 1 小时
@@ -223,6 +225,171 @@ export class UserService {
       return;
     } catch (error) {
       handleDatabaseError(error, '删除用户信息失败');
+    }
+  }
+
+  // 创建用户的角色
+  async createRoles(
+    user_id: string,
+    target_user_id: string,
+    role_ids: string[],
+  ) {
+    for (const role_id of role_ids) {
+      const res = await this.roleService.getRoleById(role_id);
+      if (!res) {
+        throw new HttpException(
+          '添加角色失败：不存在的角色!',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+    }
+
+    // 生成数据
+    const data = role_ids.map((role_id) => ({
+      userId: target_user_id,
+      roleId: role_id,
+    }));
+    try {
+      // 查看是不是已经存在的角色
+      const currentList = await this.prisma.userRole.findMany({
+        where: {
+          userId: target_user_id,
+        },
+      });
+      // 新的数据
+      const list = role_ids
+        // 找出不重复的权限
+        .filter((pid) => !currentList.some((cl) => cl.roleId === pid))
+        // 构建需要的数据
+        .map((roleId) => {
+          return { userId: target_user_id, roleId };
+        });
+
+      // 存入数据库
+      await this.prisma.userRole.createMany({ data: list });
+
+      // 写入缓存
+      await this.redis.hash_list_push(
+        `user_roles:${target_user_id}`,
+        data.map((item) => ({
+          id: item.userId + item.roleId,
+          ...item,
+        })),
+        this.cacheTTL,
+      );
+
+      // 消息队列
+      await this.rabbitmq.publish(
+        mq.exchange.name,
+        mq.routers.user.create.name,
+        { user_id, target_user_id, role_ids },
+      );
+
+      // 返回
+      return '添加完成';
+    } catch (error) {
+      handleDatabaseError(error, '创建用户的角色失败');
+    }
+  }
+
+  async updateUserRoles(
+    user_id: string,
+    target_user_id: string,
+    role_ids: string[],
+  ) {
+    // 检查传入的id是否为有效权限id，避免不存在的权限id，导致数据库处理的时候异常。
+    for (const role_id of role_ids) {
+      const res = await this.roleService.getRoleById(role_id);
+      if (!res) {
+        throw new HttpException(
+          '添加角色失败：不存在的角色!',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+    }
+
+    try {
+      // 直接添加，因为是相关联的多个操作，所以要开启事务来处理
+      await this.prisma.$transaction(async (prisma) => {
+        await prisma.userRole.deleteMany({
+          where: {
+            userId: target_user_id,
+          },
+        });
+        // 清理缓存
+        await this.redis.del(`user_roles:${target_user_id}`);
+
+        // 新的数据
+        const list = role_ids.map((role_id) => {
+          return {
+            userId: target_user_id,
+            roleId: role_id,
+          };
+        });
+        // 添加新的权限
+        await this.prisma.userRole.createMany({
+          data: list,
+        });
+        // 更新缓存
+        await this.redis.hash_list_push(
+          `user_roles:${target_user_id}`,
+          list.map((item) => ({
+            id: item.userId + item.roleId,
+            ...item,
+          })),
+          this.cacheTTL,
+        );
+      });
+
+      // 通知消息队列
+      await this.rabbitmq.publish(
+        mq.exchange.name,
+        mq.routers.user.updatedRoles.name,
+        {
+          user_id,
+          target_user_id,
+          role_ids,
+          updatedAt: new Date(),
+        },
+      );
+
+      return '更新用户角色完成';
+    } catch (error) {
+      handleDatabaseError(error, '创建用户的角色失败');
+    }
+  }
+
+  async getUserRoles(target_user_id: string) {
+    // 先看缓存有没有
+    const current = await this.redis.hash_list_get(
+      `user_roles:${target_user_id}`,
+    );
+    if (current.length > 0) {
+      return current;
+    }
+    try {
+      // 从数据库获取
+      const list = await this.prisma.userRole.findMany({
+        where: {
+          userId: target_user_id,
+        },
+      });
+      // 组织数据结构
+      const return_data = list.map((item) => ({
+        id: item.userId + item.roleId,
+        user_id: item.userId,
+        role_id: item.roleId,
+      }));
+      // 写入缓存
+      await this.redis.hash_list_push(
+        `user_roles:${target_user_id}`,
+        return_data,
+        this.cacheTTL,
+      );
+      // 返回数据
+      return return_data;
+    } catch (error) {
+      handleDatabaseError(error, '获取用户的角色列表失败');
     }
   }
 

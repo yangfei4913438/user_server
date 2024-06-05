@@ -30,7 +30,7 @@ export const mq = {
         name: 'role.added_permissions',
         queue: 'role_added_permissions',
       },
-      // 角色更新或者清理权限
+      // 角色更新权限
       updatedPermissions: {
         name: 'role.updated_permissions',
         queue: 'role_updated_permissions_queue',
@@ -91,10 +91,15 @@ export const mq = {
         name: 'user.added_roles',
         queue: 'user_added_roles_queue',
       },
-      // 更新或者清理角色
+      // 更新角色
       updatedRoles: {
         name: 'user.updated_roles',
         queue: 'user_updated_roles_queue',
+      },
+      // 清空角色
+      clearRoles: {
+        name: 'user.clear_roles',
+        queue: 'user_clear_roles_queue',
       },
     },
   },

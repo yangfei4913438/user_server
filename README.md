@@ -65,3 +65,17 @@
   - Argon2id是Argon2i和Argon2d的混合体，使用依赖于数据和独立于数据的内存访问的组合，这使Argon2i能够抵抗侧通道缓存计时攻击，并使Argon2d能够抵抗GPU破解攻击。
 - 访问控制：使用NestJS的Guard功能实现基于角色的访问控制。
 - 审计日志: 记录所有的增删改操作, 方便追溯操作记录。
+
+### 开发
+
+- 同步数据库
+
+  `npm run prisma:md init`
+
+- 生成客户端
+
+  `npm run prisma:gen`
+
+- 查看数据库开发文档
+
+  `npm run prisma:doc`
