@@ -232,7 +232,7 @@ export class RoleService {
     }
   }
 
-  // 更新权限，把旧的删了，新的添加进去
+  // 更新权限，把旧的权限删了，新的添加进去
   async updatePermissions(
     user_id: string,
     role_id: string,
@@ -296,37 +296,6 @@ export class RoleService {
     } catch (error) {
       console.log(error);
       handleDatabaseError(error, '添加权限失败');
-    }
-  }
-
-  // 清理某个角色下面的所有权限
-  async clearPermissions(user_id: string, role_id: string) {
-    try {
-      // 批量删除
-      await this.prisma.rolePermission.deleteMany({
-        where: {
-          roleId: role_id,
-        },
-      });
-
-      // 清理缓存
-      await this.redis.del(`role_permissions:${role_id}`);
-
-      // 通知消息队列
-      await this.rabbitmq.publish(
-        mq.exchange.name,
-        mq.routers.role.clearPermissions.name,
-        {
-          user_id,
-          role_id,
-          updatedAt: new Date(),
-        },
-      );
-
-      return '清理权限完成';
-    } catch (error) {
-      console.log(error);
-      handleDatabaseError(error, '清理权限失败');
     }
   }
 

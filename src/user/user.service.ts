@@ -311,6 +311,7 @@ export class UserService {
     try {
       // 直接添加，因为是相关联的多个操作，所以要开启事务来处理
       await this.prisma.$transaction(async (prisma) => {
+        // 先删除数据
         await prisma.userRole.deleteMany({
           where: {
             userId: target_user_id,
@@ -319,7 +320,7 @@ export class UserService {
         // 清理缓存
         await this.redis.del(`user_roles:${target_user_id}`);
 
-        // 新的数据
+        // 再添加新的数据
         const list = role_ids.map((role_id) => {
           return {
             userId: target_user_id,
@@ -327,7 +328,7 @@ export class UserService {
           };
         });
         // 添加新的权限
-        await this.prisma.userRole.createMany({
+        await prisma.userRole.createMany({
           data: list,
         });
         // 更新缓存

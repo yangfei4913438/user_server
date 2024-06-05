@@ -56,7 +56,7 @@ export class RoleController {
     return await this.roleService.delete(user_id, id);
   }
 
-  @Post('/add_permissions/:id')
+  @Post('/permissions/:id')
   @ApiOperation({ summary: '添加角色的权限' })
   @ApiResponse({
     status: 200,
@@ -72,7 +72,7 @@ export class RoleController {
     return await this.roleService.addPermissions(user_id, role_id, ids);
   }
 
-  @Put('/update_permissions/:id')
+  @Put('/permissions/:id')
   @ApiOperation({ summary: '修改角色的权限' })
   @ApiResponse({
     status: 200,
@@ -86,18 +86,6 @@ export class RoleController {
   ) {
     const user_id = request['user_id'];
     return await this.roleService.updatePermissions(user_id, role_id, ids);
-  }
-
-  @Delete('/clear_permissions/:id')
-  @ApiOperation({ summary: '清空角色的权限' })
-  @ApiResponse({
-    status: 200,
-    description: '批量清空角色的所有权限',
-    type: Promise<string>,
-  })
-  async clearPermission(@Req() request: Request, @Param('id') role_id: string) {
-    const user_id = request['user_id'];
-    return await this.roleService.clearPermissions(user_id, role_id);
   }
 
   @Get('/permissions/:id')

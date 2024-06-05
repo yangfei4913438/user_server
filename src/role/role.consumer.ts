@@ -135,30 +135,4 @@ export class RoleConsumer {
         this.logger.error(`角色更新权限: 审计日志记录出错 ${err}`);
       });
   }
-
-  @RabbitSubscribe({
-    exchange: mq.exchange.name,
-    routingKey: mq.routers.role.clearPermissions.name,
-    queue: mq.routers.role.clearPermissions.queue,
-  })
-  async handleClearPermissions(data: {
-    user_id: string;
-    role_id: string;
-    updatedAt: Date;
-  }) {
-    await this.prisma.auditLog
-      .create({
-        data: {
-          action: mq.routers.role.clearPermissions.name,
-          result: `成功清除角色${data.role_id}的所有权限, 清理时间: ${new Date(data.updatedAt).toISOString()}`,
-          userId: data.user_id,
-        },
-      })
-      .then(() => {
-        this.logger.log('角色清理权限: 审计日志记录成功');
-      })
-      .catch((err) => {
-        this.logger.error(`角色清理权限: 审计日志记录出错 ${err}`);
-      });
-  }
 }

@@ -30,15 +30,10 @@ export const mq = {
         name: 'role.added_permissions',
         queue: 'role_added_permissions',
       },
-      // 角色更新权限
+      // 角色更新或清空权限
       updatedPermissions: {
         name: 'role.updated_permissions',
         queue: 'role_updated_permissions_queue',
-      },
-      // 清空角色的权限
-      clearPermissions: {
-        name: 'role.clear_permissions',
-        queue: 'role_clear_permissions_queue',
       },
     },
     // 权限
@@ -86,20 +81,15 @@ export const mq = {
         name: 'user.deleted',
         queue: 'user_deleted_queue',
       },
-      // 添加角色
+      // 添加用户的角色
       addedRoles: {
         name: 'user.added_roles',
         queue: 'user_added_roles_queue',
       },
-      // 更新角色
+      // 更新或清空用户的角色
       updatedRoles: {
         name: 'user.updated_roles',
         queue: 'user_updated_roles_queue',
-      },
-      // 清空角色
-      clearRoles: {
-        name: 'user.clear_roles',
-        queue: 'user_clear_roles_queue',
       },
     },
   },
