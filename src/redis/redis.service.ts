@@ -110,50 +110,104 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     await this.client.del(key);
   }
 
-  // zset
+  // ZSET 有序集合
   // 将datetime字符串转换为UNIX时间戳（以毫秒为单位）
-  private convertDatetimeToTimestamp(datetime: string): number {
+  private convertDatetimeToTimestamp(datetime: Date): number {
     const date = new Date(datetime);
     return date.getTime();
   }
+
   // 添加对象
-  async addObjectToZSet(
+  async appendObjectToZSet(
     key: string,
-    datetime: string,
-    obj: any,
+    value: any,
+    ttl?: number,
   ): Promise<void> {
-    const score = this.convertDatetimeToTimestamp(datetime);
-    const member = JSON.stringify(obj);
+    // 转换时间为
+    const score = this.convertDatetimeToTimestamp(value.createdTime);
+    const member = this.serializeSortByObjectKey(value);
     await this.client.zadd(key, score.toString(), member);
+
+    // 设置过期时间
+    if (ttl) {
+      await this.client.expire(key, ttl);
+    }
   }
+
+  // 批量添加
+  async pushListToZSet(
+    key: string,
+    members: any[],
+    ttl?: number,
+  ): Promise<void> {
+    // 使用一个 pipeline 来执行批量操作
+    const pipeline = this.client.pipeline();
+    for (const item of members) {
+      const score = this.convertDatetimeToTimestamp(item.createdTime);
+      const member = this.serializeSortByObjectKey(item);
+      pipeline.zadd(key, score, member);
+    }
+    await pipeline.exec();
+    if (ttl) {
+      await this.client.expire(key, ttl);
+    }
+  }
+
   // 获取对象列表，正序
-  async getObjectFromZSetAsc(key: string): Promise<string[]> {
+  async getObjectsFromZSetAsc(key: string): Promise<string[]> {
     // 正序排列
-    return this.client.zrange(key, 0, -1);
+    const list = await this.client.zrange(key, 0, -1);
+    return list.map((item) => JSON.parse(item));
   }
+
   // 获取对象列表，倒序
-  async getObjectFromZSetDesc(key: string): Promise<string[]> {
+  async getObjectsFromZSetDesc(key: string): Promise<string[]> {
     // 倒序
-    return this.client.zrevrange(key, 0, -1);
+    const list = await this.client.zrevrange(key, 0, -1);
+    return list.map((item) => JSON.parse(item));
   }
 
   // 更新对象
   async updateObjectInZSet(
     key: string,
-    datetime: string,
     oldObj: any,
     newObj: any,
+    ttl?: number,
   ): Promise<void> {
     // 数据转换
-    const oldMember = JSON.stringify(oldObj);
-    const newMember = JSON.stringify(newObj);
-    const score = this.convertDatetimeToTimestamp(datetime);
+    const oldMember = this.serializeSortByObjectKey(oldObj);
+    const newMember = this.serializeSortByObjectKey(newObj);
+    const score = this.convertDatetimeToTimestamp(oldObj.createdTime);
 
     // 替换数据
     await this.client
       .multi() // 开启事务
       .zrem(key, oldMember) // 删除旧的
-      .zadd(key, score.toString(), newMember) // 添加新的
+      .zadd(key, score, newMember) // 添加新的
       .exec(); // 执行
+
+    // 设置过期时间
+    if (ttl) {
+      await this.client.expire(key, ttl);
+    }
+  }
+
+  // 删除一个对象
+  async deleteObjectInZSet(key: string, oldObj: any): Promise<void> {
+    // 数据转换
+    const oldMember = this.serializeSortByObjectKey(oldObj);
+    // 删除某个对象
+    await this.client.zrem(key, oldMember);
+  }
+
+  // 序列化对象，确保对象的字段顺序一致
+  private serializeSortByObjectKey(obj: Record<string, any>): string {
+    const sortedObj = {};
+    Object.keys(obj)
+      .sort()
+      .forEach((key) => {
+        sortedObj[key] = obj[key];
+      });
+    return JSON.stringify(sortedObj);
   }
 }
