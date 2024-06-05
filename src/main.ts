@@ -37,7 +37,7 @@ async function bootstrap() {
   // 模块注册，指定路由
   SwaggerModule.setup('/', app, document);
 
-  await app.listen(3000); // 启动监听端口
+  await app.listen(3006); // 启动监听端口
 }
 
 bootstrap();

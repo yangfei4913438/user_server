@@ -71,3 +71,53 @@
 - 查看数据库开发文档
 
   `npm run prisma:doc`
+
+### 普通运行
+
+#### 1、安装依赖
+
+  ```bash
+  npm install
+  ```
+
+#### 2、配置环境变量
+
+  > 使用本地的环境变量文件模板 `env.example` 改一个 .env 文件
+
+#### 3、启动服务
+
+  ```bash
+  npm run start:dev
+  ```
+
+#### 4、查看swagger接口文档
+
+  ```bash
+  http://127.0.0.1:3006
+  ```
+
+### docker 运行
+
+  > 因为只是演示，所以这里的步骤，只针对本地docker环境，不是正式服务器上的操作步骤. 这个需要先安装本地的 docker 运行环境。
+
+#### 1、创建环境变量文件 .env
+  > 根据实际的本地服务配置，MySQL 要先创建一个数据库
+  > 使用本地的环境变量文件模板 `env.example` 改一个 .env 文件. 根据实际情况填。
+
+#### 2、在项目的根目录下执行, 构建docker镜像
+  
+  ```shell
+  docker build -t user_server:first .
+  ```
+
+#### 3、运行镜像
+
+  ```shell
+  docker run --name user_server_container -p 3006:3006 -d --restart=always user_server:first
+  ```
+
+#### 4、查看swagger接口文档
+
+  ```bash
+  http://127.0.0.1:3006
+  ```
