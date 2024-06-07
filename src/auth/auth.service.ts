@@ -7,12 +7,12 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserService } from '../user/user.service';
-import * as argon2 from 'argon2';
 import { AuthLoginDto, AuthRegisterDto } from './dto/auth.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { mq, token } from '../consts/user';
 import { RabbitMQService } from '../rabbitmq/rabbitmq.service';
+import { formatHash, verifyHash } from '../utils/format';
 
 @Injectable()
 export class AuthService {
@@ -76,7 +76,7 @@ export class AuthService {
     }
     // 判断密码是否存在, 密码和验证码，只会同时存在一个。
     else if (user.password) {
-      const passOk = await argon2.verify(userInfo.password, user.password);
+      const passOk = await verifyHash(userInfo.password, user.password);
       if (!passOk) {
         this.logger.log('用户登陆：密码不匹配');
         throw new HttpException('无效的账号或密码', HttpStatus.FORBIDDEN);
@@ -183,7 +183,7 @@ export class AuthService {
 
   // 注册
   async register(user: AuthRegisterDto): Promise<any> {
-    const hashedPassword = await argon2.hash(user.password);
+    const hashedPassword = await formatHash(user.password);
     return this.userService.createUser(
       {
         ...user,

@@ -1,10 +1,12 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  const logger = new Logger();
 
   app.setGlobalPrefix('api'); // 全局路由前缀
 
@@ -37,7 +39,9 @@ async function bootstrap() {
   // 模块注册，指定路由
   SwaggerModule.setup('/', app, document);
 
-  await app.listen(3006); // 启动监听端口
+  await app.listen(3006, () => {
+    logger.log('服务启动成功 http://localhost:3006/');
+  }); // 启动监听端口
 }
 
 bootstrap();

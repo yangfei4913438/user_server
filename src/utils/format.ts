@@ -1,29 +1,24 @@
-const argon2 = require('argon2');
-const dayjs = require('dayjs');
-const utc = require('dayjs/plugin/utc');
-const timezone = require('dayjs/plugin/timezone');
-
-dayjs.extend(utc);
-dayjs.extend(timezone);
+import * as argon2 from 'argon2';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
 
 export const formatDate = (
   date: Date,
   format: string = 'YYYY-MM-DD HH:mm:ssZ',
-  timezone: string = 'Asia/Shanghai',
+  zone: string = 'Asia/Shanghai',
 ) => {
-  return dayjs(date).tz(timezone).format(format);
+  dayjs.extend(utc);
+  dayjs.extend(timezone);
+  return dayjs(date).tz(zone).format(format);
 };
 
-export const formatHash = async (
-  text: string,
-  salt: string = 'are you ok?',
-) => {
-  return argon2.hash(text, {
+export const formatHash = async (password: string) => {
+  return await argon2.hash(password, {
     type: argon2.argon2id, // 哈希类型
-    memoryCost: 40960, // 内存使用量，千字节，这里是10MB
-    timeCost: 3, // 迭代次数
-    parallelism: 2, // 线程数
-    raw: true, // 原始哈希
-    salt,
   });
+};
+
+export const verifyHash = async (hash: string, password: string) => {
+  return await argon2.verify(hash, password);
 };
